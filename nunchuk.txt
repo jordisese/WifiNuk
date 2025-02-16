@@ -1,0 +1,25 @@
+FUNCIONAMIENTO BOTONES NUNCHUK
+------------------------------
+
+BOTON GRANDE: pasa a modo enfocador
+BOTON PEQUEÑO: pasa a modo ejes RA/DEC
+
+
+JOYSTICK:
+
+modo ejes RA/DEC, mueve según orientación
+RA: IZDA/DERECHA
+DEC:ARRIBA/ABAJO
+(permite mover ambos a la vez si pones la posición intermedia)
+
+modo ENFOQUE
+lento: IZDA/DERECHA
+rápido: ARIBA/ABAJO
+
+
+CAMBIO DE VELOCIDADES:
+*mantener pulsado* el botón pequeño y darle al joystick
+Izda: SLEW (máxima)
+derecha: FIND
+arriba: CENTER
+abajo: GUIDE
