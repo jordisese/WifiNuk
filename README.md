@@ -4,7 +4,7 @@
 
  El software está preparado para usar una placa Wemos D1 Mini (comentar la línea #define ESP01) o un ESP-01, siguiendo estos esquemas básicos de conexionado:
 
-![WifiChuk_D1Mini](https://github.com/user-attachments/assets/2b33e551-6047-46c6-8b99-b5dcfde3c894)
+<img width="243" alt="image" src="https://github.com/user-attachments/assets/95c27a70-2402-45ec-9b0f-ace8e958df1d" />
 
 ![WifiChuk_ESP01](https://github.com/user-attachments/assets/ebe15ae3-2dde-4333-a078-cf286f8b1d27)
 
