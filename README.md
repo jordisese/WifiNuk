@@ -4,8 +4,9 @@
 
  El software está preparado para usar una placa Wemos D1 Mini (comentar la línea #define ESP01) o un ESP-01, siguiendo estos esquemas básicos de conexionado:
 
-<img width="243" alt="image" src="https://github.com/user-attachments/assets/95c27a70-2402-45ec-9b0f-ace8e958df1d" />
+![WifiChuk_WemosMini](https://github.com/user-attachments/assets/243550bf-fb8b-4244-99d0-7d1fd02b9525)
 
 ![WifiChuk_ESP01](https://github.com/user-attachments/assets/ebe15ae3-2dde-4333-a078-cf286f8b1d27)
 
- Nota: Para conectar a OnStepX en la versión ESP01 deberá cambiarse manualmente la conexión por defecto.
+ Nota: Para conectar
+a OnStepX en la versión ESP01 deberá cambiarse manualmente la conexión por defecto.
