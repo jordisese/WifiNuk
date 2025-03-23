@@ -8,51 +8,49 @@
 Nunchuk nchuk;
 #define ESP01
 
+#define OTA
+
 // PINS SDA/SDL
 // Wemos D1 MINI: SDA D2, SCL D1
 // ESP01: SDA 0, SCL 2
 // USER_LED_PIN para WEMOS D1 MINI: D5
 // USER_LED_PIN para ESP01: 1
 #ifdef ESP01
-#define SDA_PIN 0 // D2
-#define SCL_PIN 2 // D1
+#define SDA_PIN 0 
+#define SCL_PIN 2 
 #define USER_LED_PIN 1
 #else // WEMOS D1 MINI
-#define SDA_PIN D2 // 0 // D2
-#define SCL_PIN D1 // 2 // D1
+#define SDA_PIN D2 
+#define SCL_PIN D1 
 #define USER_LED_PIN D5
-#define SERIAL_DEBUG
+#define SWITCH_PIN D6
+//#define SERIAL_DEBUG
 #endif
-
-
 
 #define USER_LED_MILLIS  100
 boolean ledOn;
 uint32_t ledOffAt;
 
+#define ESP32GO_STASSID "ESP32go"
+#define ESP32GO_STAPSK  "boquerones"
+const char* esp32go_host = "192.168.4.1";
+const uint16_t esp32go_port = 10001;
 
-#include <Ticker.h>
-Ticker tickerKey;
+#define ONSTEPX_STASSID "OnStepX"
+#define ONSTEPX_STAPSK  "password"
+const char* onstepx_host = "192.168.0.1";
+const uint16_t onstepx_port = 9999;
 
-
-#define AP
-#ifndef AP
-#define STASSID "MYSSID"
-#define STAPSK  "MYPASS"
-const char* host = "192.168.1.14";
-#else
-#define STASSID "ESP32go"
-//#define STASSID "ESP-PGT"
-#define STAPSK  "boquerones"
-const char* host = "192.168.4.1";
-#endif
 
 WiFiClient client;
-const char* ssid     = STASSID;
-const char* password = STAPSK;
-bool bklight = true;
-bool focusF = false;
-const uint16_t port = 10001;
+char* ssid;
+char* password;
+const char* host;
+uint16_t port;
+
+String target = "ESP32GO"; // por defecto ESP32go, con el switch en ON, pasa a ONSTEPX
+
+#ifdef OTA
 void InitOTA()
 { ArduinoOTA.setHostname("wifinuk.local");
   ArduinoOTA.onStart([]() {
@@ -69,6 +67,7 @@ void InitOTA()
   ArduinoOTA.begin();
 
 }
+#endif
 
 void turnLedOn(bool set = true) {
   digitalWrite( USER_LED_PIN, HIGH );
@@ -119,6 +118,8 @@ void process_action(void)
   if (pressed) lastpress = pressed;
   if (lastx != curx)
   {
+    if(!client_connected())
+      client_connect();
     turnLedOn();
 #ifdef SERIAL_DEBUG
 Serial.println("X["+String(curx)+"] - B["+String(lastpress)+"]");
@@ -126,8 +127,19 @@ Serial.println("X["+String(curx)+"] - B["+String(lastpress)+"]");
     switch (curx)
     {
         case 0 : // X-EAST ON
-                  if (pressed == 2) client.print(":RS#"); // SLEW RATE
-                    else if (lastpress == 1) {/*client.print(":FS#");*/client.print(":F+#");} // FOCUS +
+                  if (pressed == 2)
+                  {
+                    if(target == "ESP32GO")
+                      client.print(":RS#"); 
+                    else
+                      client.print(":R9#");
+                  } // SLEW RATE
+                    else if (lastpress == 1)
+                    {
+                      if(target != "ESP32GO")
+                        client.print(":FS#");
+                      client.print(":F+#");
+                    }// FOCUS +
                     else if (pressed == 0) client.print(":Mw#"); // WEST
                   break;
         case 1 : // X-CENTER
@@ -136,8 +148,19 @@ Serial.println("X["+String(curx)+"] - B["+String(lastpress)+"]");
                   client.print(":FQ#");
                   break;
         case 2:  // X-WEST ON
-                  if (pressed == 2) client.print(":RM#"); // FIND RATE
-                    else if (lastpress == 1) {/*client.print(":FS#");*/client.print(":F-#");} // FOCUS -
+                  if (pressed == 2)
+                  {
+                    if(target == "ESP32GO")
+                      client.print(":RM#"); 
+                    else
+                      client.print(":R8#");
+                  }// FIND RATE
+                    else if (lastpress == 1)
+                    {
+                      if(target != "ESP32GO")
+                        client.print(":FS#");
+                      client.print(":F-#"); 
+                    }// FOCUS -
                     else if (pressed == 0) client.print(":Me#"); // EAST          
                   break;
     }
@@ -145,6 +168,8 @@ Serial.println("X["+String(curx)+"] - B["+String(lastpress)+"]");
   }
   if (lasty != cury)
   {
+    if(!client_connected())
+      client_connect();
     turnLedOn();
 #ifdef SERIAL_DEBUG
 Serial.println("Y["+String(cury)+"] - B["+String(lastpress)+"]");
@@ -152,9 +177,27 @@ Serial.println("Y["+String(cury)+"] - B["+String(lastpress)+"]");
     switch (cury)
     {
         case 0 : // Y-SOUTH ON
-                  if (pressed == 2) client.print(":RG#"); // GUIDE RATE
-                    else if (lastpress == 1) client.print(":F++#"); // FOCUS ++
-                    else if (pressed == 0) client.print(":Ms#"); // SOUTH
+                  if (pressed == 2) 
+                  {
+                    if(target == "ESP32GO")
+                      client.print(":RG#");
+                    else
+                      client.print(":R2#");
+                  }// GUIDE RATE
+                  else if (lastpress == 1) 
+                  {
+                      if(target == "ESP32GO")
+                      {
+                        client.print(":F++#");
+                      }
+                      else
+                      {
+                        client.print(":FF#");
+                        client.print(":F+#");
+                      }
+                  } // FOCUS ++
+                  else if (pressed == 0) client.print(":Ms#"); // SOUTH
+
                   break;
         case 1 : // Y-CENTER
                   client.print(":Qs#");
@@ -162,9 +205,26 @@ Serial.println("Y["+String(cury)+"] - B["+String(lastpress)+"]");
                   client.print(":FQ#");
                   break;
         case 2:  // Y-NORTH ON
-                  if (pressed == 2) client.print(":RC#"); // CENTER RATE
-                    else if (lastpress == 1) client.print(":F--#"); // FOCUS --
-                    else if (pressed == 0) client.print(":Mn#"); // NORTH          
+                  if (pressed == 2)
+                  {
+                    if(target == "ESP32GO")
+                      client.print(":RC#"); 
+                    else
+                      client.print(":R5#");
+                  } // CENTER RATE
+                  else if (lastpress == 1)
+                  {
+                    if(target == "ESP32GO")
+                    {
+                      client.print(":F--#");
+                    }
+                    else
+                    {
+                      client.print(":FF#");
+                      client.print(":F-#");
+                    }
+                  } // FOCUS --
+                  else if (pressed == 0) client.print(":Mn#"); // NORTH          
                   break;
     }
     lasty = cury;
@@ -172,34 +232,103 @@ Serial.println("Y["+String(cury)+"] - B["+String(lastpress)+"]");
 
 }
 
+bool client_connected()
+{
+  return client.connected();
+}
+
+void client_connect()
+{
+  turnLedOn();
+#ifdef SERIAL_DEBUG
+  Serial.print("connecting to ");
+  Serial.print(host);
+  Serial.print(':');
+  Serial.println(port);
+#endif
+  //String s;
+  // Use WiFiClient class to create TCP connections
+#ifdef SERIAL_DEBUG
+  Serial.println("Connecting....");
+#endif
+  if (!client.connect(host, port)) {
+#ifdef SERIAL_DEBUG
+    Serial.println("connection failed");
+#endif
+    delay(1000);
+    ESP.reset();
+    return;
+  }
+#ifdef SERIAL_DEBUG
+  Serial.print("connected");
+  Serial.println(":IP"+String(WiFi.localIP()[3])+"."+String(WiFi.localIP()[2])+"#");
+#endif
+  if(target == "ESP32GO")
+    client.print(":IP"+String(WiFi.localIP()[3])+"."+String(WiFi.localIP()[2])+"#");
+  turnLedOff();
+}
+
+
 
 void setup() {
   Wire.begin(SDA_PIN, SCL_PIN);
 #ifdef SERIAL_DEBUG
   Serial.begin(115200);
+  delay(1000);
   Serial.println();
+#endif
+
+#ifdef SWITCH_PIN
+  pinMode(SWITCH_PIN,INPUT_PULLUP);
+  delay(10);
+  if(digitalRead(SWITCH_PIN) == LOW)
+  {
+    target = "ONSTEPX";
+#ifdef SERIAL_DEBUG
+Serial.println("Switch is LOW, ONSTEPX selected");
+#endif
+  }
+#endif
+
+#ifdef SERIAL_DEBUG
   Serial.println();
   Serial.print("Connecting to ");
-  Serial.println(ssid);
+  //Serial.println(ssid);
+  Serial.println(target=="ESP32GO" ? ESP32GO_STASSID:ONSTEPX_STASSID);
 #endif
   pinMode(USER_LED_PIN, OUTPUT);
 
   turnLedOn(false);
 
   WiFi.mode(WIFI_STA);
-#ifndef AP
-  IPAddress ip(192, 168, 1, 35);
-  IPAddress gateway(192, 168, 1, 1);
-  IPAddress subnet(255, 255, 0, 0);
-  IPAddress DNS(192, 168, 1, 1);
-#else
-  IPAddress ip(192, 168, 4, 88);
-  IPAddress gateway(192, 168, 4, 1);
-  IPAddress subnet(255, 255, 0, 0);
-  IPAddress DNS(192, 168, 4, 1);
-#endif
-  WiFi.config(ip, gateway, subnet, gateway);
-  WiFi.begin(ssid, password);
+
+  if(target=="ESP32GO")
+  {
+    ssid = ESP32GO_STASSID;
+    password = ESP32GO_STAPSK;
+    host = esp32go_host;
+    port = esp32go_port;
+    IPAddress ip(192, 168, 4, 88);
+    IPAddress gateway(192, 168, 4, 1);
+    IPAddress subnet(255, 255, 0, 0);
+    IPAddress DNS(192, 168, 4, 1);
+    WiFi.config(ip, gateway, subnet, gateway);
+    WiFi.begin(ssid, password);
+  }
+  else // ONSTEPX
+  {
+    ssid = ONSTEPX_STASSID;
+    password = ONSTEPX_STAPSK;
+    host = onstepx_host;
+    port = onstepx_port;
+    IPAddress ip(192, 168, 0, 88);
+    IPAddress gateway(192, 168, 0, 1);
+    IPAddress subnet(255, 255, 0, 0);
+    IPAddress DNS(192, 168, 0, 1);
+    WiFi.config(ip, gateway, subnet, gateway);
+    WiFi.begin(ssid, password);
+  }
+
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(300);
@@ -221,59 +350,40 @@ void setup() {
 #endif
     delay(1000);
   }
-
+#ifdef OTA
   InitOTA();
+#endif
+
+  client_connect();
 }
 
 
-void loop() {
-#ifdef SERIAL_DEBUG
-  Serial.print("connecting to ");
-  Serial.print(host);
-  Serial.print(':');
-  Serial.println(port);
-#endif
-  //String s;
-  // Use WiFiClient class to create TCP connections
-#ifdef SERIAL_DEBUG
-  Serial.println("Connecting....");
-#endif
-  if (!client.connect(host, port)) {
-#ifdef SERIAL_DEBUG
-    Serial.println("connection failed");
-#endif
-    delay(5000);
-    return;
-  }
-#ifdef SERIAL_DEBUG
-  Serial.print("connected");
-  Serial.println(":IP"+String(WiFi.localIP()[3])+"."+String(WiFi.localIP()[2])+"#");
-#endif
-  turnLedOff();
 
-  while (1) 
+void loop() 
+{
+  if( ledOn && ( millis() > ledOffAt ) )
+    turnLedOff();
+  boolean success = nchuk.update();  // Get new data from the controller
+  if (!success) 
   {
-    if( ledOn && ( millis() > ledOffAt ) )
-      turnLedOff();
-    boolean success = nchuk.update();  // Get new data from the controller
-    if (!success) 
-    {
 #ifdef SERIAL_DEBUG
-      Serial.println("Controller disconnected!");
+    Serial.println("Controller disconnected!");
 #endif
-      turnLedOn(false);
-      delay(1000);
-      ESP.reset();
-    }
-    else
-    {
-      nunchuck_process();
-      process_action();
-    }
-
-    ArduinoOTA.handle();
-    delay(100); //
+    turnLedOn(false);
+    delay(1000);
+    ESP.reset();
   }
+  else
+  {
+    nunchuck_process();
+    process_action();
+  }
+#ifdef OTA
+  ArduinoOTA.handle();
+#endif
+
+  delay(50); 
+
 }
 
 
