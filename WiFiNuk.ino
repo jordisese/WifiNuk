@@ -5,26 +5,36 @@
 #include <Wire.h>
 #include <NintendoExtensionCtrl.h>
 
+ExtensionPort controller;
 Nunchuk nchuk;
-#define ESP01
+SNESMiniController snes;
+String controllerType="";
 
-#define OTA
+
+//#define ESP01
+//#define OTA
 
 // PINS SDA/SDL
 // Wemos D1 MINI: SDA D2, SCL D1
 // ESP01: SDA 0, SCL 2
 // USER_LED_PIN para WEMOS D1 MINI: D5
 // USER_LED_PIN para ESP01: 1
+// OJO: si queremos hacer SERIAL_DEBUG con el ESP01 hay que usar el GPIO3 (RX) para el LED y dejar el GPIO1 (TX) para hacer debug
 #ifdef ESP01
-#define SDA_PIN 0 
-#define SCL_PIN 2 
-#define USER_LED_PIN 1
+ #define SDA_PIN 0 
+ #define SCL_PIN 2 
+// #define SERIAL_DEBUG
+ #ifdef SERIAL_DEBUG
+  #define USER_LED_PIN 3
+ #else
+  #define USER_LED_PIN 1
+ #endif
 #else // WEMOS D1 MINI
-#define SDA_PIN D2 
-#define SCL_PIN D1 
-#define USER_LED_PIN D5
-#define SWITCH_PIN D6
-//#define SERIAL_DEBUG
+ #define SDA_PIN D2 
+ #define SCL_PIN D1 
+ #define USER_LED_PIN D5
+ #define SWITCH_PIN D6
+ #define SERIAL_DEBUG
 #endif
 
 #define USER_LED_MILLIS  100
@@ -76,7 +86,7 @@ void turnLedOn(bool set = true) {
   ledOffAt = millis() + USER_LED_MILLIS;
 }
 
-void turnLedOff() {
+void turnLedOff(void) {
   digitalWrite( USER_LED_PIN, LOW );
   ledOn = false;
 }
@@ -85,8 +95,15 @@ void turnLedOff() {
 
 int curx, cury, pressed;
 int lastx, lasty, lastpress;
+int focusmotor = 1; // así la primera pulsación de SELECT irá al 0
+bool processed = false; // para pulsaciones de cambio
 
-// pressed --> 0: NONE, 1: FOCUS, 2: AXIS
+void swap_focus(void)
+{
+  focusmotor = (focusmotor == 0 ? 1:0);
+}
+
+// pressed --> 0: NONE, 1: FOCUS, 2: AXIS, 3: FOCUS_SWAP, 4: TRACK, 5: STOP_TRACK
 // lastx --> 0: EAST, 1: CENTER, 2: WEST
 // lasty --> 0: SOUTH, 1: CENTER, 2: NORTH
 
@@ -95,10 +112,22 @@ void nunchuck_process(void)
   pressed=0;
   boolean zButton = nchuk.buttonZ();
   if(zButton)
+  {
     pressed = 1;
+    if(lastpress == 1 && !processed)
+    {
+      pressed = 3; // focus motor swap
+    }
+  }
+  else
+  {
+    processed = false; // para que la siguiente pulsación aislada se detecte
+  }
+
   boolean cButton = nchuk.buttonC();
   if(cButton)
     pressed = 2;
+
   uint8_t hor = nchuk.joyX();
   uint8_t ver = nchuk.joyY();
   curx=1;
@@ -113,8 +142,92 @@ void nunchuck_process(void)
     cury = 2;    
 }
 
+void gamepad_process(void)
+{
+  pressed=0;
+  curx=1;
+  cury=1;
+  if(snes.dpadLeft())
+    curx = 0;
+  if(snes.dpadRight())
+    curx = 2;
+  if(snes.dpadUp())
+    cury = 0;
+  if(snes.dpadDown())
+    cury = 2;
+
+  if(snes.buttonY())
+  {
+    pressed = 2;
+    curx = 0;
+  }
+  if(snes.buttonX())
+  {
+    pressed = 2;
+    cury = 0;
+  }
+  if(snes.buttonB())
+  {
+    pressed = 2;
+    curx = 2;
+  }
+  if(snes.buttonA())
+  {
+    pressed = 2;
+    cury = 2;
+  }
+
+  if(snes.buttonStart())
+    pressed = 2;
+
+  if(snes.buttonSelect())
+  {
+    pressed = 1;
+    if(lastpress == 1 && !processed)
+    {
+      pressed = 3; // focus motor swap
+    }
+  }
+  else
+  {
+    processed = false; // para que la siguiente pulsación aislada se detecte
+  }
+
+  if(snes.buttonL())
+    pressed = 4; // track_on
+
+  if(snes.buttonR())
+    pressed = 5; // track_off
+
+}
+
 void process_action(void)
 {
+  if (target == "ESP32GO" && lastpress == 1 && pressed == 3 && !processed)
+  {
+    turnLedOn();
+    pressed = 0;
+    processed = true;
+    swap_focus();
+    client.print(":Fs"+String(focusmotor)+"#");
+    client.print(":FQ#");
+#ifdef SERIAL_DEBUG
+Serial.println("focuser select["+String(focusmotor)+"]");
+#endif
+    return;
+  }
+  if (target == "ESP32GO" && pressed > 3)
+  {
+    turnLedOn();
+    if(pressed == 5) // track off
+      client.print(":Mh#");
+    else // assume track on
+      client.print(":Qw#");
+    pressed = 0;
+    return;
+  }
+  if(lastpress == 1 && pressed == 2)
+    swap_focus();
   if (pressed) lastpress = pressed;
   if (lastx != curx)
   {
@@ -256,7 +369,7 @@ void client_connect()
     Serial.println("connection failed");
 #endif
     delay(1000);
-    ESP.reset();
+    ESP.restart();
     return;
   }
 #ifdef SERIAL_DEBUG
@@ -273,7 +386,11 @@ void client_connect()
 void setup() {
   Wire.begin(SDA_PIN, SCL_PIN);
 #ifdef SERIAL_DEBUG
+#ifdef ESP01
+  Serial.begin(115200,SERIAL_8N1,SERIAL_TX_ONLY);
+#else
   Serial.begin(115200);
+#endif
   delay(1000);
   Serial.println();
 #endif
@@ -329,27 +446,69 @@ Serial.println("Switch is LOW, ONSTEPX selected");
     WiFi.begin(ssid, password);
   }
 
-
+  int count=0;
   while (WiFi.status() != WL_CONNECTED) {
     delay(300);
 #ifdef SERIAL_DEBUG    
     Serial.print("Wifi status: ");
     Serial.println(WiFi.status());
 #endif
+    count++;
+    if(count > 15)
+      ESP.restart();
   }
+  turnLedOff();
 #ifdef SERIAL_DEBUG
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 #endif
-  nchuk.begin();
-  while (!nchuk.connect()) {
+  delay(500);
+  turnLedOn(false);
+	controller.begin();
+  delay(500);
+  while(!controller.connect())
+  {
 #ifdef SERIAL_DEBUG
-    Serial.println("Nunchuk not detected!");
+    Serial.println("No controller detected!");
 #endif
     delay(1000);
   }
+
+	ExtensionType conType = controller.getControllerType();
+  switch (conType) 
+  {
+		case(ExtensionType::Nunchuk):
+#ifdef SERIAL_DEBUG
+			Serial.println("Nunchuk connected!");
+#endif
+      controllerType="Nunchuk";
+      controller.reset();
+      nchuk.begin();
+      nchuk.connect();
+			break;
+
+		case(ExtensionType::ClassicController):
+#ifdef SERIAL_DEBUG
+			Serial.println("Classic Controller connected!");
+#endif
+      controllerType="Gamepad";
+      controller.reset();
+      snes.begin();
+      snes.connect();
+			break;
+
+    default:
+#ifdef SERIAL_DEBUG
+      Serial.println("Unsupported controller detected");
+#endif
+      turnLedOn(false);
+      delay(1000);
+      ESP.restart();
+  }
+  delay(100);
+
 #ifdef OTA
   InitOTA();
 #endif
@@ -363,7 +522,11 @@ void loop()
 {
   if( ledOn && ( millis() > ledOffAt ) )
     turnLedOff();
-  boolean success = nchuk.update();  // Get new data from the controller
+  boolean success = false;
+  if(controllerType=="Nunchuk")
+    success = nchuk.update();  // Get new data from the controller
+  else
+    success = snes.update();  // Get new data from the controller
   if (!success) 
   {
 #ifdef SERIAL_DEBUG
@@ -371,11 +534,15 @@ void loop()
 #endif
     turnLedOn(false);
     delay(1000);
-    ESP.reset();
+    ESP.restart();
   }
   else
   {
-    nunchuck_process();
+    if(controllerType=="Nunchuk")
+      nunchuck_process();
+    else
+      gamepad_process();
+
     process_action();
   }
 #ifdef OTA
