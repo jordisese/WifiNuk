@@ -1,7 +1,21 @@
-//  
+//  YOU MUST SELECT ONE BOARD!
+#define ESP32
+//#define ESP32C3
+//#define ESP01
+//#define WEMOSD1
 
-#include <ESP8266WiFi.h>
-#include <ArduinoOTA.h>
+//#define OTA
+
+#if defined ESP32 || defined ESP32C3
+  #include <WiFi.h>
+#else
+  #include <ESP8266WiFi.h>
+#endif
+
+#ifdef OTA
+  #include <ArduinoOTA.h>
+#endif
+
 #include <Wire.h>
 #include <NintendoExtensionCtrl.h>
 
@@ -11,10 +25,7 @@ SNESMiniController snes;
 String controllerType="";
 
 
-//#define ESP01
-//#define OTA
-
-// PINS SDA/SDL
+// PINES SDA/SDL
 // Wemos D1 MINI: SDA D2, SCL D1
 // ESP01: SDA 0, SCL 2
 // USER_LED_PIN para WEMOS D1 MINI: D5
@@ -29,12 +40,26 @@ String controllerType="";
  #else
   #define USER_LED_PIN 1
  #endif
-#else // WEMOS D1 MINI
+#elif defined ESP32
+ #define SDA_PIN 21
+ #define SCL_PIN 22
+ #define USER_LED_PIN 2
+// #define SWITCH_PIN 10
+ #define SERIAL_DEBUG
+#elif defined ESP32C3
+ #define SDA_PIN 5
+ #define SCL_PIN 6 
+ #define USER_LED_PIN 7
+// #define SWITCH_PIN 10
+ #define SERIAL_DEBUG
+#elif defined WEMOSD1 // WEMOS D1 MINI
  #define SDA_PIN D2 
  #define SCL_PIN D1 
  #define USER_LED_PIN D5
  #define SWITCH_PIN D6
  #define SERIAL_DEBUG
+#else
+ #error "NO BOARD SELECTED!"
 #endif
 
 #define USER_LED_MILLIS  100
@@ -445,16 +470,19 @@ Serial.println("Switch is LOW, ONSTEPX selected");
     WiFi.config(ip, gateway, subnet, gateway);
     WiFi.begin(ssid, password);
   }
+#ifdef ESP32C3
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+#endif
 
   int count=0;
   while (WiFi.status() != WL_CONNECTED) {
-    delay(300);
+    delay(500);
 #ifdef SERIAL_DEBUG    
     Serial.print("Wifi status: ");
     Serial.println(WiFi.status());
 #endif
     count++;
-    if(count > 15)
+    if(count > 10)
       ESP.restart();
   }
   turnLedOff();
