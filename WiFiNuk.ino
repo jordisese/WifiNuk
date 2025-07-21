@@ -4,6 +4,13 @@
 //#define ESP01
 //#define WEMOSD1
 
+// TRY available SSIDs starting with defined ssid
+#define SCAN_WIFI_SSIDS
+
+#ifdef SCAN_WIFI_SSIDS
+  String mySSIDs[10];
+#endif
+
 //#define OTA
 
 #if defined ESP32 || defined ESP32C3
@@ -75,6 +82,7 @@ const uint16_t esp32go_port = 10001;
 #define ONSTEPX_STAPSK  "password"
 const char* onstepx_host = "192.168.0.1";
 const uint16_t onstepx_port = 9999;
+
 
 
 WiFiClient client;
@@ -235,7 +243,7 @@ void process_action(void)
     processed = true;
     swap_focus();
     client.print(":Fs"+String(focusmotor)+"#");
-    client.print(":FQ#");
+    client.print(":FQ#:XQ#");
 #ifdef SERIAL_DEBUG
 Serial.println("focuser select["+String(focusmotor)+"]");
 #endif
@@ -274,9 +282,18 @@ Serial.println("X["+String(curx)+"] - B["+String(lastpress)+"]");
                   } // SLEW RATE
                     else if (lastpress == 1)
                     {
-                      if(target != "ESP32GO")
+                      if(target == "ESP32GO")
+                      {
+                        if(focusmotor==0)
+                          client.print(":F+#");
+                        else
+                          client.print(":X+#");
+                      }
+                      else
+                      {
                         client.print(":FS#");
-                      client.print(":F+#");
+                        client.print(":F+#");
+                      }
                     }// FOCUS +
                     else if (pressed == 0) client.print(":Mw#"); // WEST
                   break;
@@ -284,6 +301,7 @@ Serial.println("X["+String(curx)+"] - B["+String(lastpress)+"]");
                   client.print(":Qw#");
                   client.print(":Qe#");
                   client.print(":FQ#");
+                  client.print(":XQ#");
                   break;
         case 2:  // X-WEST ON
                   if (pressed == 2)
@@ -295,9 +313,18 @@ Serial.println("X["+String(curx)+"] - B["+String(lastpress)+"]");
                   }// FIND RATE
                     else if (lastpress == 1)
                     {
-                      if(target != "ESP32GO")
+                      if(target == "ESP32GO")
+                      {
+                        if(focusmotor==0)
+                          client.print(":F-#");
+                        else
+                          client.print(":X-#");
+                      }
+                      else
+                      {
                         client.print(":FS#");
-                      client.print(":F-#"); 
+                        client.print(":F-#");
+                      }
                     }// FOCUS -
                     else if (pressed == 0) client.print(":Me#"); // EAST          
                   break;
@@ -326,7 +353,10 @@ Serial.println("Y["+String(cury)+"] - B["+String(lastpress)+"]");
                   {
                       if(target == "ESP32GO")
                       {
-                        client.print(":F++#");
+                        if(focusmotor==0)
+                          client.print(":F++#");
+                        else
+                          client.print(":X++#");
                       }
                       else
                       {
@@ -341,6 +371,7 @@ Serial.println("Y["+String(cury)+"] - B["+String(lastpress)+"]");
                   client.print(":Qs#");
                   client.print(":Qn#");
                   client.print(":FQ#");
+                  client.print(":XQ#");
                   break;
         case 2:  // Y-NORTH ON
                   if (pressed == 2)
@@ -354,7 +385,10 @@ Serial.println("Y["+String(cury)+"] - B["+String(lastpress)+"]");
                   {
                     if(target == "ESP32GO")
                     {
-                      client.print(":F--#");
+                      if(focusmotor==0)
+                        client.print(":F--#");
+                      else
+                        client.print(":X--#");
                     }
                     else
                     {
@@ -406,6 +440,33 @@ void client_connect()
   turnLedOff();
 }
 
+String controllerTypeString(ExtensionType conType)
+{
+  switch (conType) 
+  {
+		case(ExtensionType::ClassicController): return "ClassicController";
+                                  break;
+		case(ExtensionType::Nunchuk): return "Nunchuk";
+                                  break;
+		case(ExtensionType::GuitarController): return "GuitarController";
+                                  break;
+		case(ExtensionType::DrumController): return "DrumController";
+                                  break;
+		case(ExtensionType::DJTurntableController): return "DJTurntableController";
+                                  break;
+		case(ExtensionType::uDrawTablet): return "uDrawTablet";
+                                  break;
+		case(ExtensionType::DrawsomeTablet): return "DrawsomeTablet";
+                                  break;
+		case(ExtensionType::UnknownController): return "UnknownController";
+                                  break;
+		case(ExtensionType::NoController): return "NoController";
+                                  break;
+    default:  return "??????";
+              break;
+  }  
+  return "bad conType";
+}
 
 
 void setup() {
@@ -475,7 +536,8 @@ Serial.println("Switch is LOW, ONSTEPX selected");
 #endif
 
   int count=0;
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED) 
+  {
     delay(500);
 #ifdef SERIAL_DEBUG    
     Serial.print("Wifi status: ");
@@ -483,8 +545,58 @@ Serial.println("Switch is LOW, ONSTEPX selected");
 #endif
     count++;
     if(count > 10)
+    {
+#ifdef SCAN_WIFI_SSIDS // try other SSIDs
+      bool connOK = false;
+      int nn = 0;
+      int n = WiFi.scanNetworks();
+      for (int i = 0; i < n; ++i) 
+      {
+        if(WiFi.SSID(i).substring(0,strlen(ssid)) ==String(ssid) )
+        {
+          mySSIDs[nn]=WiFi.SSID(i);
+          nn++;
+          if(nn > 9)
+            break;
+        }
+      }
+      for (int i = 0; i < nn; ++i) 
+      {
+#ifdef SERIAL_DEBUG
+  Serial.println();
+  Serial.print("--> Connecting to ");
+  Serial.println(String(mySSIDs[i]));
+#endif
+        WiFi.disconnect();
+        WiFi.begin(mySSIDs[i].c_str(), password);
+        delay(500);
+        int cc=0;
+        while (WiFi.status() != WL_CONNECTED) 
+        {
+          delay(500);
+#ifdef SERIAL_DEBUG    
+    Serial.print("Wifi status: ");
+    Serial.println(WiFi.status());
+#endif
+          cc++;
+          if(cc > 10)
+            break;
+        }
+        if(WiFi.status() == WL_CONNECTED)
+        {
+          connOK = true;
+          break;
+        }
+      }
+      if(!connOK)
+        ESP.restart();
+#else
       ESP.restart();
+#endif
+    }
   }
+
+
   turnLedOff();
 #ifdef SERIAL_DEBUG
   Serial.println("");
@@ -530,6 +642,7 @@ Serial.println("Switch is LOW, ONSTEPX selected");
     default:
 #ifdef SERIAL_DEBUG
       Serial.println("Unsupported controller detected");
+      Serial.println("conType ["+controllerTypeString(conType)+"]");
 #endif
       turnLedOn(false);
       delay(1000);
