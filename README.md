@@ -10,7 +10,9 @@ Si se usa el interruptor permite seleccionar si se conecta a un sistema ESP32go 
 
 ![WifiChuk_ESP01](https://github.com/user-attachments/assets/ebe15ae3-2dde-4333-a078-cf286f8b1d27)
 
- Nota 1: Para conectar a OnStepX en la versión ESP01 deberá cambiarse manualmente en el código la conexión por defecto.
+ Nota: Es necesario tener instalada en el IDE la librería: Nintendo Extension Ctrl
+
+ Nota 1: Para conectar a OnStepX en la versión ESP01 deberá cambiarse manualmente en el código (buscar la línea 'String target') la conexión por defecto.
  
  Nota 2: Se ha añadido al código soporte para ESP32C3 y ESP32 devkit v1 o similares. 
  
